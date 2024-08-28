@@ -1,6 +1,5 @@
 import io
 import yt_dlp
-# from telegram import Bot
 from telegram.ext import CallbackContext
 
 async def download_youtube_video(url: str, context: CallbackContext, chat_id: int) -> None:
@@ -10,6 +9,9 @@ async def download_youtube_video(url: str, context: CallbackContext, chat_id: in
         'format': '18',  # Use format code for 360p mp4
         'noplaylist': True,
         'quiet': True,
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',  # Set a more typical user agent
+        'extractor-args': 'youtube:player-client=web',  # Force player client to web
+        'cookiefile': '/path/to/your/cookies.txt'  # Add a path to cookies if available to bypass bot detection
     }
     
     try:
