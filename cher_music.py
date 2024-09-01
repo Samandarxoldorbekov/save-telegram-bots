@@ -1,126 +1,204 @@
-# import logging
-# from aiogram import Bot, Dispatcher, types
-# from aiogram.filters import Command
-# from aiogram.fsm.state import State, StatesGroup
-# from aiogram.fsm.context import FSMContext
-# from aiogram.fsm.storage.memory import MemoryStorage
-# from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-# from aiogram.utils.keyboard import InlineKeyboardBuilder
-# from spotipy import Spotify
+
+# from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+# from telegram.ext import CallbackContext
+# from io import BytesIO
+# import requests
+# import yt_dlp
+
+# # def create_buttons(tracks, offset):
+# #     buttons = []
+# #     for idx, track in enumerate(tracks[offset:offset+15]):
+# #         track_number = idx + 1 
+# #         track_id = track['id']
+# #         buttons.append(InlineKeyboardButton(text=f"{track_number}", callback_data=f"track:{track_id}"))
+
+#     # Pagination buttons
+#     # pagination_buttons = []
+#     # if offset > 0:
+#     #     pagination_buttons.append(InlineKeyboardButton(text="⬅️ Orqaga", callback_data="prev_page"))
+#     # if len(tracks) > offset + 15:
+#     #     pagination_buttons.append(InlineKeyboardButton(text="Oldinga ➡️", callback_data="next_page"))
+
+#     # keyboard = [buttons[i:i+5] for i in range(0, len(buttons), 5)]  # Adjust to 5 buttons per row
+#     # if pagination_buttons:
+#     #     keyboard.append(pagination_buttons)
+# async def music_search(query: str, context: CallbackContext, chat_id: int) -> None:
+#     ydl_opts = {
+#         'quiet':True,
+#         'format':"bestaudio/best",
+#         "noplaylist": True,
+#         'extract_flat': True,
+#     }
+
+#     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+#         results = ydl.extract_info(f"ytsearch50:{query}", download=False)['entries']
+#         print(results)
+       
+    
+#     if results:
+#         call_lst =[]
+#         for i, entry in enumerate(results):
+#             # builder = create_buttons(i)
+#             title = entry.get('title','Unknown Title')
+#             call_lst.append(f"{i}-{title} \n")
+#         await context.bot.send_message(chat_id, f"Topilgan qo'shiqlar:\n{call_lst}")
+#         # context.chat_data['tracks'] = tracks
+
+
+
+
+
+import yt_dlp
+
+def search_music(query: str):
+    ydl_opts = {
+        'quiet': True,
+        'format': 'bestaudio/best',
+        'noplaylist': True,
+        'extract_flat': True,  # Extract only metadata without downloading
+    }
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        results = ydl.extract_info(f"ytsearch50:{query}", download=False)['entries']
+
+    print(results)
+    return results
+
+def display_results(results):
+    output = []
+    for i, entry in enumerate(results):
+        title = entry.get('title', 'Unknown Title')
+        uploader = entry.get('uploader', 'Unknown Artist')
+        output.append(f"{i + 1} - {title} - {uploader}")
+    
+    return output
+
+# Qidiruv misoli
+query = "samandar"  # Qidirish uchun musiqa nomini kiriting
+results = search_music(query)
+output = display_results(results)
+
+# Natijalarni chiqarish
+for line in output:
+    print(line)
+1
+
+def download_selected_music_as_mp3(results, selection_index):
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'outtmpl': '%(title)s.%(ext)s',  # Output filename template
+        'postprocessors': [{  # Post-processing to convert to MP3
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',  # You can change the bitrate (e.g., 192 or 320 kbps)
+        }],
+        'quiet': False,  # Disable all output
+    }
+    
+    selected_entry = results[selection_index]
+    
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([selected_entry['url']])
+
+# Foydalanuvchi tanlovini kiriting
+selection = int(input("Musiqa tanlang (1-10): ")) - 1  # Ro'yxat 0-indeksdan boshlanadi
+
+# Tanlangan musiqani MP3 formatda yuklab olish
+download_selected_music_as_mp3(results, selection)
+
+
+# from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+# from telegram.ext import CallbackContext
+# import spotipy
 # from spotipy.oauth2 import SpotifyClientCredentials
-# import os
+# from io import BytesIO
+# import requests
+# # Spotify API credentials
+# sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id='fd08e8edd45c4dae8b373285b34f3fc3',
+#                                                            client_secret='b28ccb3a487446cea96dbd8a75129ff5'))
 
-# API_TOKEN = '7452238296:AAFnS1SfDT4P-27sZFa2Xoeua3eI3X5NwRQ'
-# SPOTIFY_CLIENT_ID = 'fd08e8edd45c4dae8b373285b34f3fc3'
-# SPOTIFY_CLIENT_SECRET = 'b28ccb3a487446cea96dbd8a75129ff5'
+# def create_buttons(tracks, offset):
+#     buttons = []
+#     for idx, track in enumerate(tracks[offset:offset+15]):
+#         track_number = idx + 1 
+#         track_id = track['id']
+#         buttons.append(InlineKeyboardButton(text=f"{track_number}", callback_data=f"track:{track_id}"))
 
-# # Bot va dispatcher o'rnatilishi
-# logging.basicConfig(level=logging.INFO)
-# bot = Bot(token=API_TOKEN)
-# dp = Dispatcher(storage=MemoryStorage())
+#     # Pagination buttons
+#     pagination_buttons = []
+#     if offset > 0:
+#         pagination_buttons.append(InlineKeyboardButton(text="⬅️ Orqaga", callback_data="prev_page"))
+#     if len(tracks) > offset + 15:
+#         pagination_buttons.append(InlineKeyboardButton(text="Oldinga ➡️", callback_data="next_page"))
+    
+#     # Creating inline keyboard markup
+#     keyboard = [buttons[i:i+5] for i in range(0, len(buttons), 5)]  # Adjust to 5 buttons per row
+#     if pagination_buttons:
+#         keyboard.append(pagination_buttons)
+    
+#     return InlineKeyboardMarkup(keyboard)
 
-# # Spotify'ga ulanish
-# sp = Spotify(auth_manager=SpotifyClientCredentials(client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET))
-
-# # State Machine uchun klass
-# class SearchState(StatesGroup):
-#     waiting_for_song_choice = State()
-#     waiting_for_song_page = State()
-
-# # /start komandasi
-# @dp.message(Command("start"))
-# async def start_command(message: types.Message):
-#     await message.answer("Assalomu alaykum! Qaysi qo'shiqni qidiryapsiz? Qo'shiq yoki ijrochi nomini yuboring.")
-
-# # Musiqa yoki ijrochi nomi bo'yicha Spotify'dan qidirish
-# @dp.message()
-# async def search_song(message: types.Message, state: FSMContext):
-#     query = message.text
+# async def music_search(query: str, context: CallbackContext, chat_id: int) -> None:
 #     results = sp.search(q=query, type='track', limit=50)
     
 #     if results['tracks']['items']:
 #         tracks = results['tracks']['items']
-#         user_data = {'offset': 0, 'query': query}
-#         await state.set_data(user_data)
-
-#         def create_buttons(tracks, offset):
-#             builder = InlineKeyboardBuilder()
-#             for idx, track in enumerate(tracks[offset:offset+15]):
-#                 track_id = track['id']
-#                 builder.button(text=f"{idx+1}", callback_data=f"track:{track_id}")
-            
-#             # Pagination buttons
-#             if offset > 0:
-#                 builder.button(text="Orqaga", callback_data="prev_page")
-#             if len(tracks) > offset + 15:
-#                 builder.button(text="Oldinga", callback_data="next_page")
-            
-#             # Adjust to 5 buttons per row
-#             builder.adjust(5)
-            
-#             return builder
-
-#         # Yangi sahifa yaratish
 #         offset = 0
+#         user_data = {'offset': offset, 'query': query}
+#         context.chat_data.update(user_data)
+
+#         # Create inline keyboard
 #         builder = create_buttons(tracks, offset)
-#         track_list = "\n".join([f"{idx+1}. {track['artists'][0]['name']} - {track['name']} ({track['album']['name']}, {track['album']['release_date']})" for idx, track in enumerate(tracks[offset:offset+15])])
-#         await message.answer(f"Topilgan qo'shiqlar:\n{track_list}", reply_markup=builder.as_markup())
-#         await state.set_state(SearchState.waiting_for_song_page)
+#         track_list = "\n".join([f"{idx + 1}. {track['artists'][0]['name']} - {track['name']}" for idx, track in enumerate(tracks[offset:offset+15])])
+#         await context.bot.send_message(chat_id, f"Topilgan qo'shiqlar:\n{track_list}", reply_markup=builder)
+#         context.chat_data['tracks'] = tracks
 #     else:
-#         await message.answer("Hech narsa topilmadi. Iltimos, yana urinib ko'ring.")
+#         await context.bot.send_message(chat_id, "Hech narsa topilmadi. Iltimos, yana urinib ko'ring.")
 
-# # Foydalanuvchi qo'shiqni tanlaganda yoki sahifa tugmalariga bosilganda
-# @dp.callback_query(SearchState.waiting_for_song_page)
-# async def handle_song_choice_or_pagination(callback: types.CallbackQuery, state: FSMContext):
-#     data = callback.data
-#     user_data = await state.get_data()
-#     query = user_data.get('query', '')
-#     offset = user_data.get('offset', 0)
+# async def download_song(update: Update, context: CallbackContext) -> None:
+#     query = update.callback_query
+#     # chat_id = update.update_id
+#     track_id = query.data.split(':')[1]
     
-#     results = sp.search(q=query, type='track', limit=50)
-#     tracks = results['tracks']['items']
+#     # Fetch track details
+#     track_info = sp.track(track_id)
+#     track_name = track_info['name']
+#     artist_name = track_info['artists'][0]['name']
+#     preview_url = track_info.get('preview_url')  # Preview URL (short sample)
+ 
+#     print(f"{track_name} {artist_name}")
+#     if preview_url:
+#         response = requests.get(preview_url)
+#         audio_content = BytesIO(response.content) 
+        
+#         await context.bot.send_audio(
+#             chat_id=update.effective_chat.id,
+#             audio=audio_content,
+#             title=track_name,
+#             performer=artist_name,
+#             caption=f"{track_name} - {artist_name}\n \n kanalimizga obuna bo'lishni unutmang @samandarxoldorbekov"
+#         )
+#     else:
+#         await query.message.reply_text("Qo'shiqning previewi mavjud emas.")
 
-#     if data == "prev_page":
-#         offset = max(0, offset - 15)
-#     elif data == "next_page":
-#         offset = min(len(tracks) - 15, offset + 15)
-#     elif data.startswith("track:"):
-#         track_id = data.split(":")[1]
-#         track = sp.track(track_id)
-#         track_name = track['name']
-#         artist_name = track['artists'][0]['name']
+# async def handle_pagination(update: Update, context: CallbackContext, direction: int) -> None:
+#     chat_id = update.effective_chat.id
+#     user_data = context.chat_data
+#     tracks = user_data.get('tracks', [])
+#     offset = user_data.get('offset', 0) + direction * 15
 
-#         await callback.message.answer(f"'{artist_name} - {track_name}' qo'shig'i tanlandi.")
-#         await state.clear()
-#         return artist_name , track_name
+#     # Ensure the offset is within bounds
+#     if offset < 0:
+#         offset = 0
+#     if offset >= len(tracks):
+#         offset = (len(tracks) // 15) * 15
 
+#     user_data['offset'] = offset
 #     builder = create_buttons(tracks, offset)
-#     track_list = "\n".join([f"{idx+1}. {track['artists'][0]['name']} - {track['name']} ({track['album']['name']}, {track['album']['release_date']})" for idx, track in enumerate(tracks[offset:offset+15])])
-#     await callback.message.edit_text(f"Topilgan qo'shiqlar:\n{track_list}", reply_markup=builder.as_markup())
-#     await state.update_data(offset=offset)
+#     track_list = "\n".join([f"{idx + 1}. {track['artists'][0]['name']} - {track['name']}" for idx, track in enumerate(tracks[offset:offset+15])])
     
-    
-# def create_buttons(tracks, offset):
-#     builder = InlineKeyboardBuilder()
-#     for idx, track in enumerate(tracks[offset:offset+15]):
-#         track_id = track['id']
-#         builder.button(text=f"{idx+1}", callback_data=f"track:{track_id}")
-    
-#     # Pagination buttons
-#     if offset > 0:
-#         builder.button(text="Orqaga", callback_data="prev_page")
-#     if len(tracks) > offset + 15:
-#         builder.button(text="Oldinga", callback_data="next_page")
-    
-#     # Adjust to 5 buttons per row
-#     builder.adjust(5)
-    
-#     return builder
+#     try:
+#         await update.callback_query.message.edit_text(f"Topilgan qo'shiqlar:\n{track_list}", reply_markup=builder)
+#     except Exception as e:
+#         await update.callback_query.message.reply_text(f"Xatolik yuz berdi: {str(e)}")
 
-# # Botni ishga tushirish
-# async def main():
-#     await dp.start_polling(bot)
-
-# if __name__ == "__main__":
-#     import asyncio
-#     asyncio.run(main())

@@ -2,18 +2,15 @@ import io
 import instaloader
 import requests
 from telegram.ext import CallbackContext
+from telegram import InputMediaPhoto, InputMediaVideo
 import time
 import random
 
-async def download_instagram_video(url: str, context: CallbackContext, chat_id: int, proxy: str = None, session_file: str = 'session') -> None:
-    buffer = io.BytesIO()
-    
-    # Initialize Instaloader with proxy if provided
+async def download_instagram_media(url: str, context: CallbackContext, chat_id: int, proxy: str = None, session_file: str = 'session') -> None:
     L = instaloader.Instaloader()
     if proxy:
         L.context.proxy = proxy
-    
-    # Load session from file (log in if not available)
+
     try:
         L.load_session_from_file(username=None, filename=session_file)
     except FileNotFoundError:
@@ -21,47 +18,67 @@ async def download_instagram_video(url: str, context: CallbackContext, chat_id: 
         return
 
     try:
-        # Validate and extract the shortcode from the URL
         shortcode = url.split('/')[-2]
         if not shortcode:
             raise ValueError("Invalid Instagram URL")
-        
-        # Fetch post metadata
+
         post = instaloader.Post.from_shortcode(L.context, shortcode)
-        
-        # Ensure the post has a video
-        if not post.is_video:
-            await context.bot.send_message(chat_id=chat_id, text="The provided post does not contain a video.")
-            return
 
-        video_url = post.video_url
+        media_group = []
+        if post.typename == 'GraphSidecar':
+            # Handle slideshow posts
+            for node in post.get_sidecar_nodes():
+                buffer = io.BytesIO()
+                if node.is_video:
+                    media_url = node.video_url
+                    media_type = InputMediaVideo
+                else:
+                    media_url = node.display_url
+                    media_type = InputMediaPhoto
 
-        # Use requests to download the video
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-        response = requests.get(video_url, stream=True, headers=headers, proxies={'http': proxy, 'https': proxy} if proxy else None)
-        
-        for chunk in response.iter_content(chunk_size=1024):
-            if chunk:
-                buffer.write(chunk)
-        
-        buffer.seek(0)  # Rewind buffer to the beginning
+                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+                response = requests.get(media_url, stream=True, headers=headers, proxies={'http': proxy, 'https': proxy} if proxy else None)
 
-        # Send the video to the user via Telegram bot
-        await context.bot.send_video(chat_id=chat_id, video=buffer, supports_streaming=True)
-    
-    except instaloader.exceptions.ConnectionException as e:
-        # Handle rate limits by retrying after a delay
+                for chunk in response.iter_content(chunk_size=1024):
+                    if chunk:
+                        buffer.write(chunk)
+
+                buffer.seek(0)
+                media_group.append(media_type(buffer))
+
+        else:
+            # Handle single media (image or video) posts
+            buffer = io.BytesIO()
+            if post.is_video:
+                media_url = post.video_url
+                media_type = InputMediaVideo
+            else:
+                media_url = post.url
+                media_type = InputMediaPhoto
+
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+            response = requests.get(media_url, stream=True, headers=headers, proxies={'http': proxy, 'https': proxy} if proxy else None)
+
+            for chunk in response.iter_content(chunk_size=1024):
+                if chunk:
+                    buffer.write(chunk)
+
+            buffer.seek(0)
+            media_group.append(media_type(buffer))
+        texti = "kanalga obuna bo'lishni unutmang 😊 @samandarxoldorbekov"
+        # Send the media as a group message
+        if media_group:
+            await context.bot.send_media_group(chat_id=chat_id, media=media_group,)
+            await context.bot.send_message(chat_id=chat_id, text=texti)
+
+    except instaloader.exceptions.ConnectionException:
         await context.bot.send_message(chat_id=chat_id, text="Instagram is rate limiting us. Retrying in a few minutes...")
-        time.sleep(random.uniform(60, 180))  # Wait between 1 to 3 minutes before retrying
-        await download_instagram_video(url, context, chat_id, proxy, session_file)
+        time.sleep(random.uniform(60, 180))
+        await download_instagram_media(url, context, chat_id, proxy, session_file)
 
-    except instaloader.exceptions.BadResponseException as e:
-        # Handle cases where metadata fetching fails
+    except instaloader.exceptions.BadResponseException:
         await context.bot.send_message(chat_id=chat_id, text="Failed to fetch post metadata. The post may be private, deleted, or the URL is incorrect.")
     
     except Exception as e:
-        # Send an error message if something else goes wrong
-        await context.bot.send_message(chat_id=chat_id, text=f'Xatolik yuz berdi: {str(e)}')
+        await context.bot.send_message(chat_id=chat_id, text=f'An error occurred: {str(e)}')
 
-# Example usage with a proxy:
-# await download_instagram_video("https://www.instagram.com/p/VIDEO_SHORTCODE/", context, chat_id, proxy="http://proxyserver:port", session_file="my_instagram_session")

@@ -1,8 +1,8 @@
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
-from commands import check_link, start
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
+from commands import check_link, start, button_handler
 
 # Your bot token here
-TOKEN = '7452238296:AAFnS1SfDT4P-27sZFa2Xoeua3eI3X5NwRQ'
+TOKEN = '7481510974:AAG0pPCCCpBIU3zVy7EZoTNapuBDauUWEug'
 
 def main() -> None:
     application = Application.builder().token(TOKEN).build()
@@ -10,6 +10,9 @@ def main() -> None:
     # Register handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, check_link))
+    application.add_handler(CallbackQueryHandler(button_handler))
+
+
 
     application.run_polling()
 

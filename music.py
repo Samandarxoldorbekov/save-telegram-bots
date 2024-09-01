@@ -1,18 +1,12 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext
-import spotipy
-from spotipy.oauth2 import SpotifyClientCredentials
 from io import BytesIO
-import requests
-
-# Spotify API credentials
-sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id='fd08e8edd45c4dae8b373285b34f3fc3',
-                                                           client_secret='b28ccb3a487446cea96dbd8a75129ff5'))
+import yt_dlp
 
 def create_buttons(tracks, offset):
     buttons = []
     for idx, track in enumerate(tracks[offset:offset+15]):
-        track_number = idx + 1 + offset
+        track_number = idx + 1
         track_id = track['id']
         buttons.append(InlineKeyboardButton(text=f"{track_number}", callback_data=f"track:{track_id}"))
 
@@ -22,54 +16,93 @@ def create_buttons(tracks, offset):
         pagination_buttons.append(InlineKeyboardButton(text="⬅️ Orqaga", callback_data="prev_page"))
     if len(tracks) > offset + 15:
         pagination_buttons.append(InlineKeyboardButton(text="Oldinga ➡️", callback_data="next_page"))
-    
+
     # Creating inline keyboard markup
     keyboard = [buttons[i:i+5] for i in range(0, len(buttons), 5)]  # Adjust to 5 buttons per row
     if pagination_buttons:
         keyboard.append(pagination_buttons)
-    
+
     return InlineKeyboardMarkup(keyboard)
 
 async def music_search(query: str, context: CallbackContext, chat_id: int) -> None:
-    results = sp.search(q=query, type='track', limit=50)
-    
-    if results['tracks']['items']:
-        tracks = results['tracks']['items']
-        offset = 0
-        user_data = {'offset': offset, 'query': query}
-        context.chat_data.update(user_data)
+    print("qidirlmoqda")
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'noplaylist': True,
+        'quiet': True,
+        'skip_download': True,
+        'cookiefile': 'cookies.txt',  # Path to your cookies file
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
+        'extractor-args': 'youtube:player-client=web',
+    }
 
-        # Create inline keyboard
-        builder = create_buttons(tracks, offset)
-        track_list = "\n".join([f"{idx + 1}. {track['artists'][0]['name']} - {track['name']}" for idx, track in enumerate(tracks[offset:offset+15])])
-        await context.bot.send_message(chat_id, f"Topilgan qo'shiqlar:\n{track_list}", reply_markup=builder)
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            search_results = ydl.extract_info(f"ytsearch50:{query}", download=False)['entries']
+
+        tracks = []
+        for result in search_results:
+            track = {
+                'id': result['id'],
+                'title': result['title'],
+                'artists': [{'name': result['uploader']}],
+                'url': result['webpage_url']
+            }
+            tracks.append(track)
+
         context.chat_data['tracks'] = tracks
-    else:
-        await context.bot.send_message(chat_id, "Hech narsa topilmadi. Iltimos, yana urinib ko'ring.")
+        context.chat_data['offset'] = 0
+
+        # Create buttons for the first 15 tracks
+        builder = create_buttons(tracks, 0)
+        track_list = "\n".join([f"{idx + 1}. {track['artists'][0]['name']} - {track['title']}" for idx, track in enumerate(tracks[:15])])
+
+        await context.bot.send_message(chat_id=chat_id, text=f"Topilgan qo'shiqlar:\n{track_list}", reply_markup=builder)
+    except Exception as e:
+        await context.bot.send_message(chat_id=chat_id, text=f"Qo'shiqlarni izlashda xatolik yuz berdi: {str(e)}")
 
 async def download_song(update: Update, context: CallbackContext) -> None:
+    print("saqlanmoqda")
     query = update.callback_query
-    track_id = query.data.split(':')[1]
-    
-    # Fetch track details
-    track_info = sp.track(track_id)
-    track_name = track_info['name']
-    artist_name = track_info['artists'][0]['name']
-    preview_url = track_info.get('preview_url')  # Preview URL (short sample)
 
-    if preview_url:
-        response = requests.get(preview_url)
-        audio_content = BytesIO(response.content)
-        
-        await context.bot.send_audio(
-            chat_id=update.effective_chat.id,
-            audio=audio_content,
-            title=track_name,
-            performer=artist_name,
-            caption=f"{track_name} - {artist_name}"
-        )
-    else:
-        await query.message.reply_text("Qo'shiqning previewi mavjud emas.")
+    # Check if 'tracks' exists in chat_data
+    if 'tracks' not in context.chat_data:
+        await query.answer("Qo'shiq ro'yxati mavjud emas. Iltimos, avval qidiruvdan foydalaning.")
+        return
+
+    track_id = query.data.split(':')[1]
+
+    # Find the track URL using the track_id
+    track_url = next((track['url'] for track in context.chat_data['tracks'] if track['id'] == track_id), None)
+    if not track_url:
+        await query.answer("Qo'shiq topilmadi!")
+        return
+
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'quiet': True,
+        'noplaylist': True,
+        'outtmpl': '-',
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }],
+        'cookiefile': 'cookies.txt',  # Path to your cookies file
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
+        'extractor-args': 'youtube:player-client=web',
+    }
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info_dict = ydl.extract_info(track_url, download=False)
+            audio_data = BytesIO()
+            ydl.download([track_url])
+            audio_data.seek(0)
+
+        await context.bot.send_audio(chat_id=update.effective_chat.id, audio=audio_data, title=info_dict['title'])
+    except Exception as e:
+        await update.callback_query.message.reply_text(f"Qo'shiqni yuklashda xatolik yuz berdi: {str(e)}")
 
 async def handle_pagination(update: Update, context: CallbackContext, direction: int) -> None:
     chat_id = update.effective_chat.id
@@ -86,7 +119,7 @@ async def handle_pagination(update: Update, context: CallbackContext, direction:
     user_data['offset'] = offset
     builder = create_buttons(tracks, offset)
     track_list = "\n".join([f"{idx + 1}. {track['artists'][0]['name']} - {track['name']}" for idx, track in enumerate(tracks[offset:offset+15])])
-    
+
     try:
         await update.callback_query.message.edit_text(f"Topilgan qo'shiqlar:\n{track_list}", reply_markup=builder)
     except Exception as e:
